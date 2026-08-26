@@ -1,5 +1,8 @@
 # SharpBond
 
+<img width="1536" height="1024" alt="worflow" src="https://github.com/user-attachments/assets/ff9202dd-e0ce-40b5-9215-eec342f5bb27" />
+
+
 SharpBond is an actor-inspired, message-driven agent framework for C#. It allows you to build collaborative, stateful workflows by defining specialized agents that communicate asynchronously through a centralized message runtime.
 
 It uses `System.Threading.Channels` for safe concurrent message processing and abstracts session state management, making it ideal for multi-step AI tasks, data processing pipelines, or complex orchestration logic.
