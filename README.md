@@ -2,6 +2,7 @@
 
 <img width="1536" height="1024" alt="ChatGPT Image Aug 26, 2026, 06_30_38 PM" src="https://github.com/user-attachments/assets/bd14c6bc-9603-4af6-a30a-eeb102ae591c" />
 
+# SharpBond
 
 SharpBond is an actor-inspired, message-driven agent framework for C#. It allows you to build collaborative, stateful workflows by defining specialized agents that communicate asynchronously through a centralized message runtime.
 
@@ -11,102 +12,170 @@ It uses `System.Threading.Channels` for safe concurrent message processing and a
 
 ## Core Concepts
 
-*   **Agent:** The base execution unit. Agents inherit from `Agent` and implement `IHandles<TState, TMessage>` for the specific messages they process. They run on isolated asynchronous channel workers.
-*   **Message:** Strongly-typed records that agents send and receive.
-*   **State:** Immutable session data tied to a `Guid SessionId`. It is automatically retrieved, updated, and saved via `ISessionStorage` during message processing.
-*   **IMessageRuntime:** The central broker that routes messages to the correct agents and allows synchronous waiting for specific terminal messages.
+* **Agent:** The base execution unit. Agents inherit from `Agent` and implement `IHandles<TState, TMessage>` for the specific messages they process. They can leverage built-in abstractions like `ILlm` for AI tasks.
+* **Message:** Strongly-typed records that agents send and receive to trigger state transitions or worker actions.
+* **State:** Immutable session data tied to a `Guid SessionId`. It is automatically retrieved, updated, and saved via `ISessionStorage` during message processing.
+* **IMessageRuntime:** The central broker that routes messages to registered agents and allows synchronous waiting for terminal messages.
+* **ILlm:** An abstraction layer for LLM integrations (e.g., OpenAI) allowing agents to generate dynamic responses.
 
 ---
 
 ## Quick Start
 
-This example demonstrates an orchestration workflow where agents collaborate to generate, summarize, and review a poem.
+This example demonstrates an automated multi-agent collaboration loop where specialized agents generate, summarize, and review a poem using an LLM until quality conditions are met.
 
 ### 1. Define Messages and State
 
-First, define the state payload for your session and the messages that will drive your workflow.
+Define the shared session state and the domain messages that drive the orchestration workflow.
 
 ```csharp
 using SharpBond.Core;
 
-// 1. Define State
+namespace SharpBond.Examples.AgentCollaboration;
+
+// 1. Define Session State
 public record AgentState(Guid SessionId, string Poem, string SummarizedPoem, bool ReviewPassed) : State(SessionId);
 
-// 2. Define Messages
+// 2. Define Workflow Messages
 public record StartWorkflow : Message;
 public record RequestPoem : Message;
 public record PoemResponse : Message;
+public record RequestSummarization : Message;
+public record SummarizationResponse : Message;
+public record RequestReview : Message;
+public record ReviewResponse(int Mark) : Message;
 public record ResultResponse(string Poem) : Message;
 ```
 
 ### 2. Create Agents
 
-Agents handle specific messages and return an updated state along with any new messages to queue.
+Agents implement message handlers to perform specific logic, update the session state, and produce subsequent messages.
 
-**Worker Agent:**
+**Worker Agents:**
+
 ```csharp
-public class PoemAgent : Agent, IHandles<AgentState, RequestPoem>
-{
-    public PoemAgent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime) 
-        : base(sessionStorage, messageRuntime) { }
+using SharpBond.Core;
+using SharpBond.Core.Abstractions;
 
-    public Task<(AgentState State, List<Message> Messages)> HandleAsync(AgentState state, RequestPoem message)
+public class PoemAgent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime, ILlm llm)
+    : Agent(sessionStorage, messageRuntime, llm), 
+      IHandles<AgentState, RequestPoem>
+{
+    private const string Prompt = "Generate 5 verse poem";
+
+    public async Task<(AgentState State, List<Message> Messages)> HandleAsync(AgentState agentState, RequestPoem message)
     {
-        var newState = state with { Poem = "The morning light arrives without a sound..." };
-        
-        // Return the updated state and trigger the next step
-        return Task.FromResult((newState, new List<Message> { new PoemResponse() }));
+        var poem = await llm.GenerateAsync(Prompt);
+        Console.WriteLine($"Agent {nameof(PoemAgent)}:\nGenerated poem:\n{poem}\n---");
+
+        agentState = agentState with { Poem = poem };
+        return (agentState, [new PoemResponse()]);
+    }
+}
+
+public class SummarizationAgent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime, ILlm llm)
+    : Agent(sessionStorage, messageRuntime, llm), 
+      IHandles<AgentState, RequestSummarization>
+{
+    private const string Prompt = "Summarize 5 verse poem to 3 verse. Original poem : {0}";
+
+    public async Task<(AgentState State, List<Message> Messages)> HandleAsync(AgentState agentState, RequestSummarization message)
+    {
+        var formattedPrompt = string.Format(Prompt, agentState.Poem);
+        var summarizedPoem = await llm.GenerateAsync(formattedPrompt);
+        Console.WriteLine($"Agent {nameof(SummarizationAgent)}:\nSummarized poem:\n{summarizedPoem}\n---");
+
+        agentState = agentState with { SummarizedPoem = summarizedPoem };
+        return (agentState, [new SummarizationResponse()]);
+    }
+}
+
+public class ReviewerAgent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime, ILlm llm)
+    : Agent(sessionStorage, messageRuntime, llm), 
+      IHandles<AgentState, RequestReview>
+{
+    private const string Prompt = "Given a poem and a summarized version of the poem, give it a mark from 1 to 100. Return mark only. Poem: {0}, Summarized Poem: {1}";
+
+    public async Task<(AgentState State, List<Message> Messages)> HandleAsync(AgentState agentState, RequestReview message)
+    {
+        var formattedPrompt = string.Format(Prompt, agentState.Poem, agentState.SummarizedPoem);
+        var result = await llm.GenerateAsync(formattedPrompt);
+        return (agentState, [new ReviewResponse(int.Parse(result.Trim()))]);
     }
 }
 ```
 
 **Orchestrator Agent:**
-An orchestrator listens to responses and routes the workflow to the next agent.
-```csharp
-public class OrchestratorAgent : Agent, 
-    IHandles<AgentState, StartWorkflow>, 
-    IHandles<AgentState, PoemResponse>
-{
-    public OrchestratorAgent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime) 
-        : base(sessionStorage, messageRuntime) { }
 
-    public Task<(AgentState State, List<Message> Messages)> HandleAsync(AgentState state, StartWorkflow message)
+The orchestrator controls the execution flow, routing state between workers and handling feedback loops based on evaluation scores.
+
+```csharp
+public class OrchestratorAgent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime, ILlm llm)
+    : Agent(sessionStorage, messageRuntime, llm),
+      IHandles<AgentState, StartWorkflow>,
+      IHandles<AgentState, PoemResponse>,
+      IHandles<AgentState, SummarizationResponse>,
+      IHandles<AgentState, ReviewResponse>
+{
+    private const int MinMark = 90;
+
+    public Task<(AgentState State, List<Message> Messages)> HandleAsync(AgentState agentState, StartWorkflow message)
     {
-        return Task.FromResult((state, new List<Message> { new RequestPoem() }));
+        return Task.FromResult((agentState, new List<Message> { new RequestPoem() }));
     }
 
-    public Task<(AgentState State, List<Message> Messages)> HandleAsync(AgentState state, PoemResponse message)
+    public Task<(AgentState State, List<Message> Messages)> HandleAsync(AgentState agentState, PoemResponse message)
     {
-        // Finish the workflow by emitting the final result
-        return Task.FromResult((state, new List<Message> { new ResultResponse(state.Poem) }));
+        return Task.FromResult((agentState, new List<Message> { new RequestSummarization() }));
+    }
+
+    public Task<(AgentState State, List<Message> Messages)> HandleAsync(AgentState agentState, SummarizationResponse message)
+    {
+        return Task.FromResult((agentState, new List<Message> { new RequestReview() }));
+    }
+
+    public Task<(AgentState State, List<Message> Messages)> HandleAsync(AgentState agentState, ReviewResponse message)
+    {
+        Console.WriteLine($"Review score: {message.Mark}\n---");
+
+        if (message.Mark >= MinMark)
+        {
+            return Task.FromResult((agentState, new List<Message> { new ResultResponse(agentState.SummarizedPoem) }));
+        }
+
+        Console.WriteLine("Score is below threshold. Retrying generation flow...\n---");
+        return Task.FromResult((agentState, new List<Message> { new RequestPoem() }));
     }
 }
 ```
 
 ### 3. Initialize and Run
 
-Use the in-memory implementations to bootstrap the runtime, register your agents, and start the workflow. 
+Wire up infrastructure components, register your agents, and dispatch the initial message to trigger the pipeline.
 
 ```csharp
 using SharpBond.Core.InMemory;
+using SharpBond.Examples.AgentCollaboration;
+using SharpBond.Integrations.OpenAI;
 
-// Initialize infrastructure
+// 1. Setup infrastructure and LLM integration
+const string model = "gpt-5.1";
+const string apiKey = "YOUR_OPENAI_API_KEY";
+
 var sessionStorage = new InMemorySessionStorage();
 var runtime = new InMemoryMessageRuntime(sessionStorage);
+var llm = new OpenAILlm(model, apiKey);
 
-// Register agents (Runtime auto-registers them in the base constructor)
-var poemAgent = new PoemAgent(sessionStorage, runtime);
-var orchestratorAgent = new OrchestratorAgent(sessionStorage, runtime);
+// 2. Instantiate agents (Agents automatically register with runtime on instantiation)
+var poemAgent = new PoemAgent(sessionStorage, runtime, llm);
+var summarizationAgent = new SummarizationAgent(sessionStorage, runtime, llm);
+var reviewerAgent = new ReviewerAgent(sessionStorage, runtime, llm);
+var orchestratorAgent = new OrchestratorAgent(sessionStorage, runtime, llm);
 
-// Initialize session state
-var sessionId = Guid.NewGuid();
-var initialState = new AgentState(sessionId, string.Empty, string.Empty, false);
+// 3. Initialize state and run workflow synchronously to result
+var agentState = new AgentState(Guid.NewGuid(), string.Empty, string.Empty, false);
+var result = await runtime.SendAndWaitAsync<StartWorkflow, ResultResponse>(new StartWorkflow(), agentState);
 
-// Send the initial message and wait for the ResultResponse
-var result = await runtime.SendAndWaitAsync<StartWorkflow, ResultResponse>(
-    new StartWorkflow(), 
-    initialState
-);
-
-Console.WriteLine($"Workflow finished! Result: {result.Poem}");
+Console.WriteLine("Final Result Poem:");
+Console.WriteLine(result.Poem);
 ```
