@@ -12,7 +12,8 @@ public static class ReflectionUtils
                 .Where(i => i.GetGenericTypeDefinition() == typeof(IHandles<,>))
                 .ToList();
 
-        public async Task<(State State, IEnumerable<Message> Messages)> CallHandleMethodAsync(object target, object message, State state)
+        public async Task<(State State, IEnumerable<Message> Messages)> CallHandleMethodAsync(object target,
+            object message, State state)
         {
             var handleInterface = type
                 .GetHandledInterfaces()
@@ -22,19 +23,19 @@ public static class ReflectionUtils
 
                     return args[0] == state.GetType() && args[1] == message.GetType();
                 });
-        
+
             var handleMethod = handleInterface.GetMethods().Single(m => m.Name == nameof(IHandles<,>.HandleAsync));
             var task = (Task)handleMethod.Invoke(target, [state, message]);
-            
+
             await task;
-            
+
             var resultProperty = task.GetType().GetProperty("Result");
             var tupleResult = resultProperty.GetValue(task);
 
             var tupleType = tupleResult.GetType();
             var newState = (State)tupleType.GetField("Item1").GetValue(tupleResult);
             var newMessages = (IEnumerable<Message>)tupleType.GetField("Item2").GetValue(tupleResult);
-        
+
             return (newState, newMessages);
         }
     }

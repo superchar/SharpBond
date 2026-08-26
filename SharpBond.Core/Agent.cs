@@ -1,5 +1,4 @@
-﻿using System.Collections;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Threading.Channels;
 using SharpBond.Core.Abstractions;
 using SharpBond.Core.Helpers;
@@ -31,7 +30,6 @@ public abstract class Agent
             channel.Writer.TryWrite(message);
             _ = ChannelWorker(channel, state);
             _channels.TryAdd(state.SessionId, channel);
-            
         }
     }
 
