@@ -2,8 +2,6 @@
 
 public interface IMessageRuntime
 {
-    Task SendAsync<TMessage>(TMessage message, State state) where TMessage : Message;
-
     Task<TWaitMessage> SendAndWaitAsync<TMessage, TWaitMessage>(TMessage message, State state)
         where TMessage : Message
         where TWaitMessage : Message;

@@ -3,3 +3,5 @@
 /SharpBond.Examples.AgentCollaboration/bin
 /SharpBond.Core/bin
 /SharpBond.Core/obj
+/SharpBond.Integrations.OpenAI/obj
+/SharpBond.Integrations.OpenAI/bin

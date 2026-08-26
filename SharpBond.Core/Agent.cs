@@ -12,31 +12,32 @@ public abstract class Agent
     
     private readonly ConcurrentDictionary<Guid, Channel<object>> _channels = new();
 
-    protected Agent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime)
+    protected Agent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime, ILlm llm)
     {
         _sessionStorage = sessionStorage;
         _messageRuntime = messageRuntime;
         _messageRuntime.RegisterAsync(this);
     }
 
-    internal void QueueMessage<TMessage>(TMessage message, State state)
+    internal void QueueMessage<TMessage>(TMessage message, Guid sessionId)
     {
-        if (_channels.TryGetValue(state.SessionId, out var channel))
+        if (_channels.TryGetValue(sessionId, out var channel))
         {
             channel.Writer.TryWrite(message);
         }
         else
         {   channel = Channel.CreateUnbounded<object>();
             channel.Writer.TryWrite(message);
-            _ = ChannelWorker(channel, state);
-            _channels.TryAdd(state.SessionId, channel);
+            _ = ChannelWorker(channel, sessionId);
+            _channels.TryAdd(sessionId, channel);
         }
     }
 
-    private async Task ChannelWorker(Channel<object> channel, State state)
+    private async Task ChannelWorker(Channel<object> channel, Guid sessionId)
     {
         await foreach (var message in channel.Reader.ReadAllAsync())
         {
+            var state = await _sessionStorage.GetAsync<State>(sessionId);
             var (newState, messages) = await GetType().CallHandleMethodAsync(this, message, state);
             
             await _sessionStorage.PutAsync(state.SessionId, newState);

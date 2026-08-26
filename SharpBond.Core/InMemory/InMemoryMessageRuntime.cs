@@ -9,13 +9,24 @@ public class InMemoryMessageRuntime(ISessionStorage sessionStorage) : IMessageRu
     private readonly ConcurrentDictionary<Type, List<Agent>> _agentRegistry = [];
     private readonly ConcurrentDictionary<(Type, Guid SessionId), TaskCompletionSource<object>> _waiters = [];
 
-    public Task SendAsync<TMessage>(TMessage message, State state) where TMessage : Message
+    public async Task<TWaitMessage> SendAndWaitAsync<TMessage, TWaitMessage>(TMessage message, State state)
+        where TMessage : Message
+        where TWaitMessage : Message
+    {
+        await sessionStorage.PutAsync(state.SessionId, state);
+        var waitTask = WaitAsync<TWaitMessage>(state.SessionId);
+        await SendAsync(message, state.SessionId);
+
+        return await waitTask;
+    }
+
+    public Task SendAsync<TMessage>(TMessage message, Guid sessionId) where TMessage : Message
     {
         var messageType = message.GetType();
-        if (_waiters.TryGetValue((messageType, state.SessionId), out var taskCompletionSource))
+        if (_waiters.TryGetValue((messageType, sessionId), out var taskCompletionSource))
         {
             taskCompletionSource.SetResult(message);
-            _waiters.Remove((messageType, state.SessionId), out _);
+            _waiters.Remove((messageType, sessionId), out _);
         }
 
         if (!_agentRegistry.TryGetValue(message.GetType(), out var agents))
@@ -25,26 +36,10 @@ public class InMemoryMessageRuntime(ISessionStorage sessionStorage) : IMessageRu
 
         foreach (var agent in agents)
         {
-            agent.QueueMessage(message, state);
+            agent.QueueMessage(message, sessionId);
         }
 
         return Task.CompletedTask;
-    }
-
-    public async Task<TWaitMessage> SendAndWaitAsync<TMessage, TWaitMessage>(TMessage message, State state)
-        where TMessage : Message
-        where TWaitMessage : Message
-    {
-        var waitTask = WaitAsync<TWaitMessage>(state.SessionId);
-        await SendAsync(message, state);
-
-        return await waitTask;
-    }
-
-    public async Task SendAsync<TMessage>(TMessage message, Guid sessionId) where TMessage : Message
-    {
-        var state = await sessionStorage.GetAsync<State>(sessionId);
-        await SendAsync(message, state);
     }
 
     public Task RegisterAsync<TAgent>(TAgent agent) where TAgent : Agent
