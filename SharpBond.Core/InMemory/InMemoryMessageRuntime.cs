@@ -4,22 +4,23 @@ using SharpBond.Core.Helpers;
 
 namespace SharpBond.Core.InMemory;
 
-public class InMemoryMessageRuntime : IMessageRuntime
+public class InMemoryMessageRuntime(ISessionStorage sessionStorage) : IMessageRuntime
 {
-    private readonly ISessionStorage _sessionStorage;
-    private readonly ConcurrentDictionary<Type, List<Agent>> _agentRegistry = new();
+    private readonly ConcurrentDictionary<Type, List<Agent>> _agentRegistry = [];
+    private readonly ConcurrentDictionary<(Type, Guid SessionId), TaskCompletionSource<object>> _waiters = [];
 
-    public InMemoryMessageRuntime(ISessionStorage sessionStorage)
+    public Task SendAsync<TMessage>(TMessage message, State state) where TMessage : Message
     {
-        _sessionStorage = sessionStorage;
-    }
+        var messageType = message.GetType();
+        if (_waiters.TryGetValue((messageType, state.SessionId), out var taskCompletionSource))
+        {
+            taskCompletionSource.SetResult(message);
+            _waiters.Remove((messageType, state.SessionId), out _);
+        }
 
-    public Task SendAsync<TMessage>(TMessage message, State state)
-    {
         if (!_agentRegistry.TryGetValue(message.GetType(), out var agents))
         {
             return Task.CompletedTask;
-            ;
         }
 
         foreach (var agent in agents)
@@ -30,9 +31,19 @@ public class InMemoryMessageRuntime : IMessageRuntime
         return Task.CompletedTask;
     }
 
-    public async Task SendAsync<TMessage>(TMessage message, Guid sessionId)
+    public async Task<TWaitMessage> SendAndWaitAsync<TMessage, TWaitMessage>(TMessage message, State state)
+        where TMessage : Message
+        where TWaitMessage : Message
     {
-        var state = await _sessionStorage.GetAsync<State>(sessionId);
+        var waitTask = WaitAsync<TWaitMessage>(state.SessionId);
+        await SendAsync(message, state);
+
+        return await waitTask;
+    }
+
+    public async Task SendAsync<TMessage>(TMessage message, Guid sessionId) where TMessage : Message
+    {
+        var state = await sessionStorage.GetAsync<State>(sessionId);
         await SendAsync(message, state);
     }
 
@@ -57,5 +68,13 @@ public class InMemoryMessageRuntime : IMessageRuntime
         }
 
         return Task.CompletedTask;
+    }
+
+    private async Task<TMessage> WaitAsync<TMessage>(Guid sessionId) where TMessage : Message
+    {
+        var taskCompletionSource = new TaskCompletionSource<object>();
+        _waiters[(typeof(TMessage), sessionId)] = taskCompletionSource;
+        var result = await taskCompletionSource.Task;
+        return (TMessage)result;
     }
 }

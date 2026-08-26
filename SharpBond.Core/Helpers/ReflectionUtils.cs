@@ -12,7 +12,7 @@ public static class ReflectionUtils
                 .Where(i => i.GetGenericTypeDefinition() == typeof(IHandles<,>))
                 .ToList();
 
-        public async Task<(State State, IEnumerable Messages)> CallHandleMethodAsync(object target, object message, State state)
+        public async Task<(State State, IEnumerable<Message> Messages)> CallHandleMethodAsync(object target, object message, State state)
         {
             var handleInterface = type
                 .GetHandledInterfaces()
@@ -33,7 +33,7 @@ public static class ReflectionUtils
 
             var tupleType = tupleResult.GetType();
             var newState = (State)tupleType.GetField("Item1").GetValue(tupleResult);
-            var newMessages = (IEnumerable)tupleType.GetField("Item2").GetValue(tupleResult);
+            var newMessages = (IEnumerable<Message>)tupleType.GetField("Item2").GetValue(tupleResult);
         
             return (newState, newMessages);
         }

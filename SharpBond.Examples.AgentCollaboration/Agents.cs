@@ -17,6 +17,8 @@ public record RequestReview : Message;
 
 public record ReviewResponse(bool Approved) : Message;
 
+public record ResultResponse(string Poem) : Message;
+
 public record AgentState(Guid SessionId, string Poem, string SummarizedPoem, bool ReviewPassed) : State(SessionId);
 
 
@@ -87,12 +89,7 @@ public class OrchestratorAgent : Agent, IHandles<AgentState, StartWorkflow>, IHa
     }
 
     public Task<(AgentState State, List<Message> Messages)> HandleAsync(AgentState agentState, ReviewResponse message)
-    {
-        if (message.Approved)
-        {
-            Console.WriteLine(agentState.SummarizedPoem);
-        }
-
-        return Task.FromResult((state: agentState, new List<Message>()));
-    }
+        => Task.FromResult(message.Approved
+            ? (state: agentState, [new ResultResponse(agentState.SummarizedPoem)])
+            : (state: agentState, new List<Message>()));
 }
