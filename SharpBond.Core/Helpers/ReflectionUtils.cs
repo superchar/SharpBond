@@ -1,5 +1,7 @@
 ﻿using System.Collections;
+using System.Reflection;
 using SharpBond.Core.Abstractions;
+using SharpBond.Core.Tools;
 
 namespace SharpBond.Core.Helpers;
 
@@ -38,5 +40,10 @@ public static class ReflectionUtils
 
             return (newState, newMessages);
         }
+
+        public List<MethodInfo> GetToolMethods()
+            => type.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance)
+                .Where(m => m.GetCustomAttribute<ToolAttribute>() != null)
+                .ToList();
     }
 }
