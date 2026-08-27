@@ -5,3 +5,5 @@
 /SharpBond.Core/obj
 /SharpBond.Integrations.OpenAI/obj
 /SharpBond.Integrations.OpenAI/bin
+/SharpBond.Examples.Tools/obj
+/SharpBond.Examples.Tools/bin
