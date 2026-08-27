@@ -2,8 +2,6 @@
 
 <img width="1536" height="1024" alt="ChatGPT Image Aug 26, 2026, 06_30_38 PM" src="https://github.com/user-attachments/assets/bd14c6bc-9603-4af6-a30a-eeb102ae591c" />
 
-# SharpBond
-
 SharpBond is an actor-inspired, message-driven agent framework for C#. It allows you to build collaborative, stateful workflows by defining specialized agents that communicate asynchronously through a centralized message runtime.
 
 It uses `System.Threading.Channels` for safe concurrent message processing and abstracts session state management, making it ideal for multi-step AI tasks, data processing pipelines, or complex orchestration logic.
