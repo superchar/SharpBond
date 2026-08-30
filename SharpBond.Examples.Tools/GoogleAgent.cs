@@ -8,8 +8,8 @@ public record StartMessage : Message;
 
 public record ResultMessage(string Response) : Message;
 
-public class GoogleAgent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime, ILlm llm)
-    : Agent(sessionStorage, messageRuntime, llm), IHandles<Unit, StartMessage>
+public class GoogleAgent(IStateStorage stateStorage, IMessageRuntime messageRuntime, ILlm llm)
+    : Agent(stateStorage, messageRuntime, llm), IHandles<Unit, StartMessage>
 {
     public async Task<(Unit State, List<Message> Messages)> HandleAsync(Unit state, StartMessage message)
     {

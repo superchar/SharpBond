@@ -12,6 +12,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpBond.Integrations.Open
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpBond.Examples.Tools", "SharpBond.Examples.Tools\SharpBond.Examples.Tools.csproj", "{BC443A20-6A71-49AC-90C9-C43994A54CD7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpBond.Integrations.Redis", "SharpBond.Integrations.Redis\SharpBond.Integrations.Redis.csproj", "{FBFABBAC-E60D-4A19-B495-947184E7D4DE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -34,10 +36,15 @@ Global
 		{BC443A20-6A71-49AC-90C9-C43994A54CD7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BC443A20-6A71-49AC-90C9-C43994A54CD7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BC443A20-6A71-49AC-90C9-C43994A54CD7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FBFABBAC-E60D-4A19-B495-947184E7D4DE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FBFABBAC-E60D-4A19-B495-947184E7D4DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FBFABBAC-E60D-4A19-B495-947184E7D4DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FBFABBAC-E60D-4A19-B495-947184E7D4DE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{34C9FC05-AB87-4FB3-A219-BC0E0FA60267} = {5DD612BE-F6A7-43CA-9631-8C420AE45D80}
 		{0A46EB9E-047B-42E7-A536-B53EABE5DF81} = {7A9F3590-54E1-4495-80CD-29CC452827CB}
 		{BC443A20-6A71-49AC-90C9-C43994A54CD7} = {5DD612BE-F6A7-43CA-9631-8C420AE45D80}
+		{FBFABBAC-E60D-4A19-B495-947184E7D4DE} = {7A9F3590-54E1-4495-80CD-29CC452827CB}
 	EndGlobalSection
 EndGlobal

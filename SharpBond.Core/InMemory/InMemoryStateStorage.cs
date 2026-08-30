@@ -3,7 +3,7 @@ using SharpBond.Core.Abstractions;
 
 namespace SharpBond.Core.InMemory;
 
-public class InMemorySessionStorage : ISessionStorage
+public class InMemoryStateStorage : IStateStorage
 {
     private readonly ConcurrentDictionary<Guid, object> _sessions = new();
 

@@ -21,8 +21,8 @@ public record ResultResponse(string Poem) : Message;
 
 public record AgentState(Guid SessionId, string Poem, string SummarizedPoem, bool ReviewPassed) : State(SessionId);
 
-public class PoemAgent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime, ILlm llm)
-    : Agent(sessionStorage,
+public class PoemAgent(IStateStorage stateStorage, IMessageRuntime messageRuntime, ILlm llm)
+    : Agent(stateStorage,
         messageRuntime,
         llm), IHandles<AgentState, RequestPoem>
 {
@@ -38,8 +38,8 @@ public class PoemAgent(ISessionStorage sessionStorage, IMessageRuntime messageRu
     }
 }
 
-public class SummarizationAgent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime, ILlm llm)
-    : Agent(sessionStorage,
+public class SummarizationAgent(IStateStorage stateStorage, IMessageRuntime messageRuntime, ILlm llm)
+    : Agent(stateStorage,
         messageRuntime,
         llm), IHandles<AgentState, RequestSummarization>
 {
@@ -58,8 +58,8 @@ public class SummarizationAgent(ISessionStorage sessionStorage, IMessageRuntime 
     }
 }
 
-public class ReviewerAgent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime, ILlm llm)
-    : Agent(sessionStorage,
+public class ReviewerAgent(IStateStorage stateStorage, IMessageRuntime messageRuntime, ILlm llm)
+    : Agent(stateStorage,
         messageRuntime,
         llm), IHandles<AgentState, RequestReview>
 {
@@ -74,8 +74,8 @@ public class ReviewerAgent(ISessionStorage sessionStorage, IMessageRuntime messa
     }
 }
 
-public class OrchestratorAgent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime, ILlm llm)
-    : Agent(sessionStorage,
+public class OrchestratorAgent(IStateStorage stateStorage, IMessageRuntime messageRuntime, ILlm llm)
+    : Agent(stateStorage,
             messageRuntime,
             llm), IHandles<AgentState, StartWorkflow>, IHandles<AgentState, PoemResponse>,
         IHandles<AgentState, SummarizationResponse>, IHandles<AgentState, ReviewResponse>

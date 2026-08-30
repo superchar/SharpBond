@@ -7,3 +7,5 @@
 /SharpBond.Integrations.OpenAI/bin
 /SharpBond.Examples.Tools/obj
 /SharpBond.Examples.Tools/bin
+/SharpBond.Integrations.Redis/obj
+/SharpBond.Integrations.Redis/bin

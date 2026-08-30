@@ -4,14 +4,14 @@ using SharpBond.Integrations.OpenAI;
 
 const string model = "gpt-5.1";
 const string apiKey = "";
-var sessionStorage = new InMemorySessionStorage();
-var runtime = new InMemoryMessageRuntime(sessionStorage);
+var stateStorage = new InMemoryStateStorage();
+var runtime = new InMemoryMessageRuntime(stateStorage);
 var llm = new OpenAILlm(model, apiKey);
 
-var poemAgent = new PoemAgent(sessionStorage, runtime, llm);
-var summarizationAgent = new SummarizationAgent(sessionStorage, runtime, llm);
-var reviewerAgent = new ReviewerAgent(sessionStorage, runtime, llm);
-var orchestratorAgent = new OrchestratorAgent(sessionStorage, runtime, llm);
+var poemAgent = new PoemAgent(stateStorage, runtime, llm);
+var summarizationAgent = new SummarizationAgent(stateStorage, runtime, llm);
+var reviewerAgent = new ReviewerAgent(stateStorage, runtime, llm);
+var orchestratorAgent = new OrchestratorAgent(stateStorage, runtime, llm);
 
 var agentState = new AgentState(Guid.NewGuid(), string.Empty, string.Empty, false);
 

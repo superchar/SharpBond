@@ -1,6 +1,6 @@
 ﻿namespace SharpBond.Core.Abstractions;
 
-public interface ISessionStorage
+public interface IStateStorage
 {
     
     Task<TState> GetAsync<TState>(Guid sessionId);

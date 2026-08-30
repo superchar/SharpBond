@@ -8,13 +8,13 @@ namespace SharpBond.Core;
 public abstract class Agent
 {
     private readonly IMessageRuntime _messageRuntime;
-    private readonly ISessionStorage _sessionStorage;
+    private readonly IStateStorage _stateStorage;
     
     private readonly ConcurrentDictionary<Guid, Channel<object>> _channels = new();
 
-    protected Agent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime, ILlm llm)
+    protected Agent(IStateStorage stateStorage, IMessageRuntime messageRuntime, ILlm llm)
     {
-        _sessionStorage = sessionStorage;
+        _stateStorage = stateStorage;
         _messageRuntime = messageRuntime;
         _messageRuntime.RegisterAsync(this);
     }
@@ -37,10 +37,10 @@ public abstract class Agent
     {
         await foreach (var message in channel.Reader.ReadAllAsync())
         {
-            var state = await _sessionStorage.GetAsync<State>(sessionId);
+            var state = await _stateStorage.GetAsync<State>(sessionId);
             var (newState, messages) = await GetType().CallHandleMethodAsync(this, message, state);
             
-            await _sessionStorage.PutAsync(state.SessionId, newState);
+            await _stateStorage.PutAsync(state.SessionId, newState);
 
             foreach (var newMessage in messages)
             {

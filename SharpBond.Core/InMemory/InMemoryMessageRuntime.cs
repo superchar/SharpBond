@@ -4,7 +4,7 @@ using SharpBond.Core.Helpers;
 
 namespace SharpBond.Core.InMemory;
 
-public class InMemoryMessageRuntime(ISessionStorage sessionStorage) : IMessageRuntime
+public class InMemoryMessageRuntime(IStateStorage stateStorage) : IMessageRuntime
 {
     private readonly ConcurrentDictionary<Type, List<Agent>> _agentRegistry = [];
     private readonly ConcurrentDictionary<(Type, Guid SessionId), TaskCompletionSource<object>> _waiters = [];
@@ -13,7 +13,7 @@ public class InMemoryMessageRuntime(ISessionStorage sessionStorage) : IMessageRu
         where TMessage : Message
         where TWaitMessage : Message
     {
-        await sessionStorage.PutAsync(state.SessionId, state);
+        await stateStorage.PutAsync(state.SessionId, state);
         var waitTask = WaitAsync<TWaitMessage>(state.SessionId);
         await SendAsync(message, state.SessionId);
 
