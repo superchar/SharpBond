@@ -2,8 +2,6 @@
 
 <img width="1536" height="1024" alt="ChatGPT Image Aug 26, 2026, 06_30_38 PM" src="https://github.com/user-attachments/assets/bd14c6bc-9603-4af6-a30a-eeb102ae591c" />
 
-# SharpBond
-
 SharpBond is an actor-inspired, message-driven agent framework for C#. It allows you to build collaborative, stateful workflows by defining specialized agents that communicate asynchronously through a centralized message runtime.
 
 It uses `System.Threading.Channels` for safe concurrent message processing and abstracts session state management, making it ideal for multi-step AI tasks, data processing pipelines, or complex orchestration logic.
@@ -14,13 +12,14 @@ It uses `System.Threading.Channels` for safe concurrent message processing and a
 
 * **Agent:** The base execution unit. Agents inherit from `Agent` and implement `IHandles<TState, TMessage>` for the specific messages they process. They can leverage built-in abstractions like `ILlm` for AI tasks.
 * **Message:** Strongly-typed records that agents send and receive to trigger state transitions or worker actions.
-* **State:** Immutable session data tied to a `Guid SessionId`. It is automatically retrieved, updated, and saved via `ISessionStorage` during message processing.
+* **State:** Immutable session data tied to a `Guid SessionId`. It is automatically retrieved, updated, and saved via `ISessionStorage` during message processing. For stateless workflows, `Unit` can be used.
 * **IMessageRuntime:** The central broker that routes messages to registered agents and allows synchronous waiting for terminal messages.
 * **ILlm:** An abstraction layer for LLM integrations (e.g., OpenAI) allowing agents to generate dynamic responses.
+* **Tools:** Methods decorated with the `[Tool]` attribute can be exposed to the LLM. They can accept any object, return any object, and be asynchronous, enabling LLMs to interact with external systems, APIs, or local logic during generation.
 
 ---
 
-## Quick Start
+## Quick Start: Multi-Agent Collaboration
 
 This example demonstrates an automated multi-agent collaboration loop where specialized agents generate, summarize, and review a poem using an LLM until quality conditions are met.
 
@@ -178,4 +177,70 @@ var result = await runtime.SendAndWaitAsync<StartWorkflow, ResultResponse>(new S
 
 Console.WriteLine("Final Result Poem:");
 Console.WriteLine(result.Poem);
+```
+
+---
+
+## Tool Calling (Function Calling)
+
+SharpBond agents can expose tools to the LLM during generation. Tools are simply methods decorated with the `[Tool]` attribute. They support asynchronous execution as well as arbitrary parameter and return types.
+
+### 1. Define an Agent with Tools
+
+To expose tools to the LLM, call `llm.UseTools(this)` before invoking `GenerateAsync`. For stateless interactions, use `Unit`.
+
+```csharp
+using SharpBond.Core;
+using SharpBond.Core.Abstractions;
+using SharpBond.Core.Tools;
+
+namespace SharpBond.Examples.Tools;
+
+public record StartMessage : Message;
+public record ResultMessage(string Response) : Message;
+
+public class GoogleAgent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime, ILlm llm)
+    : Agent(sessionStorage, messageRuntime, llm), 
+      IHandles<Unit, StartMessage>
+{
+    public async Task<(Unit State, List<Message> Messages)> HandleAsync(Unit state, StartMessage message)
+    {
+        // 1. Bind agent tools to the LLM context and generate
+        var result = await llm.UseTools(this)
+            .GenerateAsync("Give me the first page that Google returns for query 'dogs'");
+
+        return (state, [new ResultMessage(result)]);
+    }
+
+    // 2. Decorate methods with [Tool] to expose them to the LLM
+    [Tool]
+    public string GetGoogleApiKey() => "a0df382b-a145-42a5-98ab-85342b4ca94e";
+
+    [Tool]
+    public string SearchInGoogle(string searchQuery, string apiKey) 
+        => $"The search result for query {searchQuery} is [https://en.wikipedia.org/wiki/Dog](https://en.wikipedia.org/wiki/Dog)";
+}
+```
+
+### 2. Run the Tool Calling Workflow
+
+```csharp
+using SharpBond.Core;
+using SharpBond.Core.InMemory;
+using SharpBond.Examples.Tools;
+using SharpBond.Integrations.OpenAI;
+
+const string model = "gpt-5.1";
+const string apiKey = "YOUR_OPENAI_API_KEY";
+
+var sessionStorage = new InMemorySessionStorage();
+var runtime = new InMemoryMessageRuntime(sessionStorage);
+var llm = new OpenAILlm(model, apiKey);
+
+var googleAgent = new GoogleAgent(sessionStorage, runtime, llm);
+
+// Trigger workflow with Unit.Value for stateless execution
+var result = await runtime.SendAndWaitAsync<StartMessage, ResultMessage>(new StartMessage(), Unit.Value);
+
+Console.WriteLine($"The search result is: {result.Response}");
 ```
