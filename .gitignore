@@ -11,3 +11,12 @@
 /SharpBond.Integrations.Redis/bin
 /SharpBond.Integrations.AzureServiceBus/obj
 /SharpBond.Integrations.AzureServiceBus/bin
+/SharpBond.Examples.AzureServiceBus.OrchestratorAgent/bin
+/SharpBond.Examples.AzureServiceBus.OrchestratorAgent/obj
+/SharpBond.Examples.AzureServiceBus.PoemAgent/bin
+/SharpBond.Examples.AzureServiceBus.PoemAgent/obj
+/SharpBond.Examples.AzureServiceBus.ReviewerAgent/bin
+/SharpBond.Examples.AzureServiceBus.ReviewerAgent/obj
+/SharpBond.Examples.AzureServiceBus.SummarizationAgent/bin
+/SharpBond.Examples.AzureServiceBus.SummarizationAgent/obj
+/SharpBond.Examples.AzureServiceBus.Types/obj
