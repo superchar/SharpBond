@@ -20,9 +20,14 @@ public static class PolymorphicSerialization
     public static T? Deserialize<T>(string json)
         => JsonSerializer.Deserialize<T>(json, JsonSerializerOptions);
 
-    public static void AddDynamicPolymorphism(JsonTypeInfo typeInfo)
+    private static void AddDynamicPolymorphism(JsonTypeInfo typeInfo)
     {
-        if (typeInfo.Type != typeof(State) || typeInfo.Type != typeof(Message))
+        if (typeInfo.Kind != JsonTypeInfoKind.Object)
+        {
+            return;
+        }
+        
+        if (typeInfo.Type != typeof(State) && typeInfo.Type != typeof(Message))
         {
             return;
         }

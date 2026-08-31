@@ -22,6 +22,7 @@ public class AzureServiceBusMessageRuntime(string connectionString, IStateStorag
     public async Task<TWaitMessage> SendAndWaitAsync<TMessage, TWaitMessage>(TMessage message, State state)
         where TMessage : Message where TWaitMessage : Message
     {
+        await TryCreateQueueAndListenAsync(typeof(TWaitMessage));
         await stateStorage.PutAsync(state.SessionId, state);
         var waitTask = WaitAsync<TWaitMessage>(state.SessionId);
         await SendAsync(message, state.SessionId);
@@ -32,11 +33,11 @@ public class AzureServiceBusMessageRuntime(string connectionString, IStateStorag
     public async Task SendAsync<TMessage>(TMessage message, Guid sessionId) where TMessage : Message
     {
         var messageType = message.GetType();
-        var queueName = messageType.FullName 
-            ?? throw new InvalidOperationException($"Type {messageType} must have a valid FullName.");
+        var queueName = messageType.FullName
+                        ?? throw new InvalidOperationException($"Type {messageType} must have a valid FullName.");
 
         var sender = _senders.GetOrAdd(queueName, name => _client.CreateSender(name));
-        
+
         var jsonPayload = PolymorphicSerialization.Serialize(message);
         var serviceBusMessage = new ServiceBusMessage(jsonPayload)
         {
@@ -51,87 +52,17 @@ public class AzureServiceBusMessageRuntime(string connectionString, IStateStorag
 
     public async Task RegisterAsync<TAgent>(TAgent agent) where TAgent : Agent
     {
-        var handledMessages = agent
+        var handledMessageTypes = agent
             .GetType()
             .GetHandledInterfaces()
             .Select(i => i.GetGenericArguments()[1])
             .ToList();
 
-        foreach (var handledMessage in handledMessages)
+        foreach (var handleMessageType in handledMessageTypes)
         {
-            var queueName = handledMessage.FullName 
-                ?? throw new InvalidOperationException($"Type {handledMessage} must have a valid FullName.");
-
-            _agentRegistry.GetOrAdd(handledMessage, _ => []).Add(agent);
-            
-            if (_processors.ContainsKey(queueName))
-            {
-                continue;
-            }
-            
-            if (!await _administrationClient.QueueExistsAsync(queueName))
-            {
-                await _administrationClient.CreateQueueAsync(queueName);
-            }
-
-            var processor = _client.CreateProcessor(queueName);
-
-            processor.ProcessMessageAsync += args =>
-            {
-                try
-                {
-                    if (!args.Message.ApplicationProperties.TryGetValue("SessionId", out var rawSessionId) ||
-                        !Guid.TryParse(rawSessionId?.ToString(), out var sessionId))
-                    {
-                        return Task.CompletedTask;
-                    }
-                    
-                    var deserializedMessage = PolymorphicSerialization.Deserialize<object>(args.Message.Body.ToString());
-                    if (deserializedMessage is Message messageObj)
-                    {
-                        ReceiveMessage(handledMessage, messageObj, sessionId);
-                    }
-
-                    return Task.CompletedTask;
-                }
-                catch (Exception exception)
-                {
-                    return Task.FromException(exception);
-                }
-            };
-
-            if (_processors.TryAdd(queueName, processor))
-            {
-                await processor.StartProcessingAsync();
-            }
+            _agentRegistry.GetOrAdd(handleMessageType, _ => []).Add(agent);
+            await TryCreateQueueAndListenAsync(handleMessageType);
         }
-    }
-
-    private void ReceiveMessage(Type messageType, object messageBody, Guid sessionId)
-    {
-        if (_waiters.TryRemove((messageType, sessionId), out var taskCompletionSource))
-        {
-            taskCompletionSource.SetResult(messageBody);
-        }
-
-        if (!_agentRegistry.TryGetValue(messageType, out var agents))
-        {
-            return;
-        }
-        
-        foreach (var agent in agents)
-        {
-            agent.QueueMessage(messageBody, sessionId);
-        }
-    }
-
-    private async Task<TMessage> WaitAsync<TMessage>(Guid sessionId) where TMessage : Message
-    {
-        var taskCompletionSource = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _waiters[(typeof(TMessage), sessionId)] = taskCompletionSource;
-        
-        var result = await taskCompletionSource.Task;
-        return (TMessage)result;
     }
 
     public async ValueTask DisposeAsync()
@@ -148,5 +79,78 @@ public class AzureServiceBusMessageRuntime(string connectionString, IStateStorag
         }
 
         await _client.DisposeAsync();
+    }
+
+    private async Task TryCreateQueueAndListenAsync(Type type)
+    {
+        var queueName = type.FullName
+                        ?? throw new InvalidOperationException($"Type {type} must have a valid FullName.");
+
+        if (_processors.ContainsKey(queueName))
+        {
+            return;
+        }
+
+        if (!await _administrationClient.QueueExistsAsync(queueName))
+        {
+            await _administrationClient.CreateQueueAsync(queueName);
+        }
+
+        var processor = _client.CreateProcessor(queueName);
+
+        processor.ProcessMessageAsync += args =>
+        {
+            try
+            {
+                if (!args.Message.ApplicationProperties.TryGetValue("SessionId", out var rawSessionId) ||
+                    !Guid.TryParse(rawSessionId?.ToString(), out var sessionId))
+                {
+                    return Task.CompletedTask;
+                }
+
+                var deserializedMessage = PolymorphicSerialization.Deserialize<Message>(args.Message.Body.ToString());
+                ReceiveMessage(type, deserializedMessage, sessionId);
+
+                return Task.CompletedTask;
+            }
+            catch (Exception exception)
+            {
+                return Task.FromException(exception);
+            }
+        };
+
+        processor.ProcessErrorAsync += _ => Task.CompletedTask;
+
+        if (_processors.TryAdd(queueName, processor))
+        {
+            await processor.StartProcessingAsync();
+        }
+    }
+
+    private void ReceiveMessage(Type messageType, object messageBody, Guid sessionId)
+    {
+        if (_waiters.TryRemove((messageType, sessionId), out var taskCompletionSource))
+        {
+            taskCompletionSource.SetResult(messageBody);
+        }
+
+        if (!_agentRegistry.TryGetValue(messageType, out var agents))
+        {
+            return;
+        }
+
+        foreach (var agent in agents)
+        {
+            agent.QueueMessage(messageBody, sessionId);
+        }
+    }
+
+    private async Task<TMessage> WaitAsync<TMessage>(Guid sessionId) where TMessage : Message
+    {
+        var taskCompletionSource = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _waiters[(typeof(TMessage), sessionId)] = taskCompletionSource;
+
+        var result = await taskCompletionSource.Task;
+        return (TMessage)result;
     }
 }

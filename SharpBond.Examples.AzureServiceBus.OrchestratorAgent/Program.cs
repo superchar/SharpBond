@@ -13,10 +13,14 @@ var stateStorage = new RedisStateStorage(redisConnectionString);
 var runtime = new AzureServiceBusMessageRuntime(azureServiceBusConnectionString, stateStorage);
 var llm = new OpenAILlm(model, openAiApiKey);
 
-var agent = new OrchestratorAgent(stateStorage, runtime, llm);
+var orchestratorAgent = new OrchestratorAgent(stateStorage, runtime, llm);
+var agentState = new AgentState(Guid.NewGuid(), string.Empty, string.Empty, false);
 
-Console.WriteLine($"{nameof(OrchestratorAgent)} started press any key to stop");
-Console.ReadKey();
+var result = await runtime.SendAndWaitAsync<StartWorkflow, ResultResponse>(new StartWorkflow(), agentState);
+
+Console.WriteLine("------------------------------------------------------");
+Console.WriteLine("Result poem: ");
+Console.WriteLine(result.Poem);
 
 public class OrchestratorAgent(IStateStorage stateStorage, IMessageRuntime messageRuntime, ILlm llm)
     : Agent(stateStorage,
