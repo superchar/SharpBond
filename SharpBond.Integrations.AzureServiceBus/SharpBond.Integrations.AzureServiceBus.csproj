@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.20.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\SharpBond.Core\SharpBond.Core.csproj" />
+    </ItemGroup>
+
+</Project>

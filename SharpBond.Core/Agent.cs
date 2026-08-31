@@ -19,7 +19,7 @@ public abstract class Agent
         _messageRuntime.RegisterAsync(this);
     }
 
-    internal void QueueMessage<TMessage>(TMessage message, Guid sessionId)
+    public void QueueMessage<TMessage>(TMessage message, Guid sessionId)
     {
         if (_channels.TryGetValue(sessionId, out var channel))
         {

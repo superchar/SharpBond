@@ -29,7 +29,7 @@ public class InMemoryMessageRuntime(IStateStorage stateStorage) : IMessageRuntim
             _waiters.Remove((messageType, sessionId), out _);
         }
 
-        if (!_agentRegistry.TryGetValue(message.GetType(), out var agents))
+        if (!_agentRegistry.TryGetValue(messageType, out var agents))
         {
             return Task.CompletedTask;
         }

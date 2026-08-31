@@ -9,3 +9,5 @@
 /SharpBond.Examples.Tools/bin
 /SharpBond.Integrations.Redis/obj
 /SharpBond.Integrations.Redis/bin
+/SharpBond.Integrations.AzureServiceBus/obj
+/SharpBond.Integrations.AzureServiceBus/bin
