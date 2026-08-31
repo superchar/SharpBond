@@ -35,28 +35,7 @@ It supports lightweight, in-memory execution using `System.Threading.Channels` a
 
 This example demonstrates how to run specialized agents across independent processes or microservices. Agents communicate via **Azure Service Bus** and share pipeline state using **Redis**.
 
-```text
-                           +----------------------+
-                           |   Azure Service Bus  |
-                           |   (Message Runtime)  |
-                           +----------+-----------+
-                                      |
-         +----------------------------+----------------------------+
-         |                            |                            |
-         v                            v                            v
-+------------------+         +------------------+         +------------------+
-|   PoemAgent      |         | SummarizationAgent |       |  ReviewerAgent   |
-|  (Process 1)     |         |   (Process 2)    |         |   (Process 3)    |
-+--------+---------+         +--------+---------+         +--------+---------+
-         |                            |                            |
-         +----------------------------+----------------------------+
-                                      |
-                                      v
-                           +----------------------+
-                           |        Redis         |
-                           |    (State Storage)   |
-                           +----------------------+
-```
+<img width="1536" height="1024" alt="ChatGPT Image Aug 31, 2026, 05_51_53 PM" src="https://github.com/user-attachments/assets/372616a9-4f4e-4b91-acaa-d394559c50ae" />
 
 ### 1. Shared Types & Messages
 
