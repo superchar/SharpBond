@@ -4,7 +4,7 @@
 
 SharpBond is an actor-inspired, message-driven agent framework for C#. It allows you to build collaborative, stateful workflows by defining specialized agents that communicate asynchronously through a centralized message runtime.
 
-It uses `System.Threading.Channels` for safe concurrent message processing and abstracts session state management, making it ideal for multi-step AI tasks, data processing pipelines, or complex orchestration logic.
+It supports lightweight, in-memory execution using `System.Threading.Channels` as well as distributed, multi-process execution across microservices using **Azure Service Bus** for message queuing and **Redis** for state persistence.
 
 ---
 
@@ -12,25 +12,39 @@ It uses `System.Threading.Channels` for safe concurrent message processing and a
 
 * **Agent:** The base execution unit. Agents inherit from `Agent` and implement `IHandles<TState, TMessage>` for the specific messages they process. They can leverage built-in abstractions like `ILlm` for AI tasks.
 * **Message:** Strongly-typed records that agents send and receive to trigger state transitions or worker actions.
-* **State:** Immutable session data tied to a `Guid SessionId`. It is automatically retrieved, updated, and saved via `ISessionStorage` during message processing. For stateless workflows, `Unit` can be used.
-* **IMessageRuntime:** The central broker that routes messages to registered agents and allows synchronous waiting for terminal messages.
+* **State:** Immutable session data tied to a `Guid SessionId`. It is automatically retrieved, updated, and saved via `IStateStorage` during message processing. For stateless workflows, `Unit` can be used.
+* **IMessageRuntime:** The central broker that routes messages to registered agents (via in-memory channels or Azure Service Bus queues/topics) and allows synchronous waiting for terminal messages.
+* **IStateStorage:** Abstraction for persisting agent session state (e.g., In-Memory or Redis).
 * **ILlm:** An abstraction layer for LLM integrations (e.g., OpenAI) allowing agents to generate dynamic responses.
 * **Tools:** Methods decorated with the `[Tool]` attribute can be exposed to the LLM. They can accept any object, return any object, and be asynchronous, enabling LLMs to interact with external systems, APIs, or local logic during generation.
 
 ---
 
-## Quick Start: Multi-Agent Collaboration
+## Integrations
 
-This example demonstrates an automated multi-agent collaboration loop where specialized agents generate, summarize, and review a poem using an LLM until quality conditions are met.
+| Package | Purpose | Key Types |
+| :--- | :--- | :--- |
+| **`SharpBond.Core`** | Core abstractions & in-memory implementations | `Agent`, `Message`, `State`, `IHandles<TState, TMessage>` |
+| **`SharpBond.Integrations.OpenAI`** | OpenAI LLM integration | `OpenAILlm` |
+| **`SharpBond.Integrations.Redis`** | Distributed session state storage | `RedisStateStorage` |
+| **`SharpBond.Integrations.AzureServiceBus`** | Distributed message runtime broker | `AzureServiceBusMessageRuntime` |
 
-### 1. Define Messages and State
+---
 
-Define the shared session state and the domain messages that drive the orchestration workflow.
+## Quick Start: Distributed Multi-Agent Collaboration
+
+This example demonstrates how to run specialized agents across independent processes or microservices. Agents communicate via **Azure Service Bus** and share pipeline state using **Redis**.
+
+<img width="1536" height="1024" alt="ChatGPT Image Aug 31, 2026, 05_51_53 PM" src="https://github.com/user-attachments/assets/372616a9-4f4e-4b91-acaa-d394559c50ae" />
+
+### 1. Shared Types & Messages
+
+Define the state and messages in a shared contract project.
 
 ```csharp
 using SharpBond.Core;
 
-namespace SharpBond.Examples.AgentCollaboration;
+namespace SharpBond.Examples.AzureServiceBus.Types;
 
 // 1. Define Session State
 public record AgentState(Guid SessionId, string Poem, string SummarizedPoem, bool ReviewPassed) : State(SessionId);
@@ -46,18 +60,36 @@ public record ReviewResponse(int Mark) : Message;
 public record ResultResponse(string Poem) : Message;
 ```
 
-### 2. Create Agents
+### 2. Independent Worker Agents
 
-Agents implement message handlers to perform specific logic, update the session state, and produce subsequent messages.
+Worker agents can run in separate instances, microservices, or background worker processes.
 
-**Worker Agents:**
+**Poem Worker:**
 
 ```csharp
 using SharpBond.Core;
 using SharpBond.Core.Abstractions;
+using SharpBond.Examples.AzureServiceBus.Types;
+using SharpBond.Integrations.AzureServiceBus;
+using SharpBond.Integrations.OpenAI;
+using SharpBond.Integrations.Redis;
 
-public class PoemAgent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime, ILlm llm)
-    : Agent(sessionStorage, messageRuntime, llm), 
+const string model = "gpt-5.1";
+const string openAiApiKey = "YOUR_OPENAI_API_KEY";
+const string redisConnectionString = "localhost:6379";
+const string azureServiceBusConnectionString = "YOUR_SERVICE_BUS_CONNECTION_STRING";
+
+var stateStorage = new RedisStateStorage(redisConnectionString);
+var runtime = new AzureServiceBusMessageRuntime(azureServiceBusConnectionString, stateStorage);
+var llm = new OpenAILlm(model, openAiApiKey);
+
+var agent = new PoemAgent(stateStorage, runtime, llm);
+
+Console.WriteLine($"{nameof(PoemAgent)} started. Press any key to stop.");
+Console.ReadKey();
+
+public class PoemAgent(IStateStorage stateStorage, IMessageRuntime messageRuntime, ILlm llm)
+    : Agent(stateStorage, messageRuntime, llm), 
       IHandles<AgentState, RequestPoem>
 {
     private const string Prompt = "Generate 5 verse poem";
@@ -71,9 +103,34 @@ public class PoemAgent(ISessionStorage sessionStorage, IMessageRuntime messageRu
         return (agentState, [new PoemResponse()]);
     }
 }
+```
 
-public class SummarizationAgent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime, ILlm llm)
-    : Agent(sessionStorage, messageRuntime, llm), 
+**Summarization Worker:**
+
+```csharp
+using SharpBond.Core;
+using SharpBond.Core.Abstractions;
+using SharpBond.Examples.AzureServiceBus.Types;
+using SharpBond.Integrations.AzureServiceBus;
+using SharpBond.Integrations.OpenAI;
+using SharpBond.Integrations.Redis;
+
+const string model = "gpt-5.1";
+const string openAiApiKey = "YOUR_OPENAI_API_KEY";
+const string redisConnectionString = "localhost:6379";
+const string azureServiceBusConnectionString = "YOUR_SERVICE_BUS_CONNECTION_STRING";
+
+var stateStorage = new RedisStateStorage(redisConnectionString);
+var runtime = new AzureServiceBusMessageRuntime(azureServiceBusConnectionString, stateStorage);
+var llm = new OpenAILlm(model, openAiApiKey);
+
+var agent = new SummarizationAgent(stateStorage, runtime, llm);
+
+Console.WriteLine($"{nameof(SummarizationAgent)} started. Press any key to stop.");
+Console.ReadKey();
+
+public class SummarizationAgent(IStateStorage stateStorage, IMessageRuntime messageRuntime, ILlm llm)
+    : Agent(stateStorage, messageRuntime, llm), 
       IHandles<AgentState, RequestSummarization>
 {
     private const string Prompt = "Summarize 5 verse poem to 3 verse. Original poem : {0}";
@@ -88,9 +145,34 @@ public class SummarizationAgent(ISessionStorage sessionStorage, IMessageRuntime 
         return (agentState, [new SummarizationResponse()]);
     }
 }
+```
 
-public class ReviewerAgent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime, ILlm llm)
-    : Agent(sessionStorage, messageRuntime, llm), 
+**Reviewer Worker:**
+
+```csharp
+using SharpBond.Core;
+using SharpBond.Core.Abstractions;
+using SharpBond.Examples.AzureServiceBus.Types;
+using SharpBond.Integrations.AzureServiceBus;
+using SharpBond.Integrations.OpenAI;
+using SharpBond.Integrations.Redis;
+
+const string model = "gpt-5.1";
+const string openAiApiKey = "YOUR_OPENAI_API_KEY";
+const string redisConnectionString = "localhost:6379";
+const string azureServiceBusConnectionString = "YOUR_SERVICE_BUS_CONNECTION_STRING";
+
+var stateStorage = new RedisStateStorage(redisConnectionString);
+var runtime = new AzureServiceBusMessageRuntime(azureServiceBusConnectionString, stateStorage);
+var llm = new OpenAILlm(model, openAiApiKey);
+
+var agent = new ReviewerAgent(stateStorage, runtime, llm);
+
+Console.WriteLine($"{nameof(ReviewerAgent)} started. Press any key to stop.");
+Console.ReadKey();
+
+public class ReviewerAgent(IStateStorage stateStorage, IMessageRuntime messageRuntime, ILlm llm)
+    : Agent(stateStorage, messageRuntime, llm), 
       IHandles<AgentState, RequestReview>
 {
     private const string Prompt = "Given a poem and a summarized version of the poem, give it a mark from 1 to 100. Return mark only. Poem: {0}, Summarized Poem: {1}";
@@ -104,13 +186,39 @@ public class ReviewerAgent(ISessionStorage sessionStorage, IMessageRuntime messa
 }
 ```
 
-**Orchestrator Agent:**
+### 3. Orchestrator & Workflow Trigger
 
-The orchestrator controls the execution flow, routing state between workers and handling feedback loops based on evaluation scores.
+The Orchestrator agent handles workflow decisions and evaluation feedback loops.
 
 ```csharp
-public class OrchestratorAgent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime, ILlm llm)
-    : Agent(sessionStorage, messageRuntime, llm),
+using SharpBond.Core;
+using SharpBond.Core.Abstractions;
+using SharpBond.Examples.AzureServiceBus.Types;
+using SharpBond.Integrations.AzureServiceBus;
+using SharpBond.Integrations.OpenAI;
+using SharpBond.Integrations.Redis;
+
+const string model = "gpt-5.1";
+const string openAiApiKey = "YOUR_OPENAI_API_KEY";
+const string redisConnectionString = "localhost:6379";
+const string azureServiceBusConnectionString = "YOUR_SERVICE_BUS_CONNECTION_STRING";
+
+var stateStorage = new RedisStateStorage(redisConnectionString);
+var runtime = new AzureServiceBusMessageRuntime(azureServiceBusConnectionString, stateStorage);
+var llm = new OpenAILlm(model, openAiApiKey);
+
+var orchestratorAgent = new OrchestratorAgent(stateStorage, runtime, llm);
+var agentState = new AgentState(Guid.NewGuid(), string.Empty, string.Empty, false);
+
+// Dispatch initial message and block until ResultResponse terminal message is received
+var result = await runtime.SendAndWaitAsync<StartWorkflow, ResultResponse>(new StartWorkflow(), agentState);
+
+Console.WriteLine("------------------------------------------------------");
+Console.WriteLine("Final Result Poem:");
+Console.WriteLine(result.Poem);
+
+public class OrchestratorAgent(IStateStorage stateStorage, IMessageRuntime messageRuntime, ILlm llm)
+    : Agent(stateStorage, messageRuntime, llm),
       IHandles<AgentState, StartWorkflow>,
       IHandles<AgentState, PoemResponse>,
       IHandles<AgentState, SummarizationResponse>,
@@ -135,48 +243,19 @@ public class OrchestratorAgent(ISessionStorage sessionStorage, IMessageRuntime m
 
     public Task<(AgentState State, List<Message> Messages)> HandleAsync(AgentState agentState, ReviewResponse message)
     {
-        Console.WriteLine($"Review score: {message.Mark}\n---");
+        Console.WriteLine($"Review score: {message.Mark}");
+        Console.WriteLine("------------------------------------------------------");
 
         if (message.Mark >= MinMark)
         {
             return Task.FromResult((agentState, new List<Message> { new ResultResponse(agentState.SummarizedPoem) }));
         }
 
-        Console.WriteLine("Score is below threshold. Retrying generation flow...\n---");
+        Console.WriteLine("Score is below threshold. Retrying generation flow...");
+        Console.WriteLine("------------------------------------------------------");
         return Task.FromResult((agentState, new List<Message> { new RequestPoem() }));
     }
 }
-```
-
-### 3. Initialize and Run
-
-Wire up infrastructure components, register your agents, and dispatch the initial message to trigger the pipeline.
-
-```csharp
-using SharpBond.Core.InMemory;
-using SharpBond.Examples.AgentCollaboration;
-using SharpBond.Integrations.OpenAI;
-
-// 1. Setup infrastructure and LLM integration
-const string model = "gpt-5.1";
-const string apiKey = "YOUR_OPENAI_API_KEY";
-
-var sessionStorage = new InMemorySessionStorage();
-var runtime = new InMemoryMessageRuntime(sessionStorage);
-var llm = new OpenAILlm(model, apiKey);
-
-// 2. Instantiate agents (Agents automatically register with runtime on instantiation)
-var poemAgent = new PoemAgent(sessionStorage, runtime, llm);
-var summarizationAgent = new SummarizationAgent(sessionStorage, runtime, llm);
-var reviewerAgent = new ReviewerAgent(sessionStorage, runtime, llm);
-var orchestratorAgent = new OrchestratorAgent(sessionStorage, runtime, llm);
-
-// 3. Initialize state and run workflow synchronously to result
-var agentState = new AgentState(Guid.NewGuid(), string.Empty, string.Empty, false);
-var result = await runtime.SendAndWaitAsync<StartWorkflow, ResultResponse>(new StartWorkflow(), agentState);
-
-Console.WriteLine("Final Result Poem:");
-Console.WriteLine(result.Poem);
 ```
 
 ---
@@ -199,8 +278,8 @@ namespace SharpBond.Examples.Tools;
 public record StartMessage : Message;
 public record ResultMessage(string Response) : Message;
 
-public class GoogleAgent(ISessionStorage sessionStorage, IMessageRuntime messageRuntime, ILlm llm)
-    : Agent(sessionStorage, messageRuntime, llm), 
+public class GoogleAgent(IStateStorage stateStorage, IMessageRuntime messageRuntime, ILlm llm)
+    : Agent(stateStorage, messageRuntime, llm), 
       IHandles<Unit, StartMessage>
 {
     public async Task<(Unit State, List<Message> Messages)> HandleAsync(Unit state, StartMessage message)
@@ -233,11 +312,11 @@ using SharpBond.Integrations.OpenAI;
 const string model = "gpt-5.1";
 const string apiKey = "YOUR_OPENAI_API_KEY";
 
-var sessionStorage = new InMemorySessionStorage();
-var runtime = new InMemoryMessageRuntime(sessionStorage);
+var stateStorage = new InMemoryStateStorage();
+var runtime = new InMemoryMessageRuntime(stateStorage);
 var llm = new OpenAILlm(model, apiKey);
 
-var googleAgent = new GoogleAgent(sessionStorage, runtime, llm);
+var googleAgent = new GoogleAgent(stateStorage, runtime, llm);
 
 // Trigger workflow with Unit.Value for stateless execution
 var result = await runtime.SendAndWaitAsync<StartMessage, ResultMessage>(new StartMessage(), Unit.Value);
