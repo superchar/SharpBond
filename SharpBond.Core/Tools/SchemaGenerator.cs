@@ -57,12 +57,17 @@ public static class SchemaGenerator
                 requiredNode.Add(parameter.Name!);
             }
         }
-
+        
         var rootSchema = new JsonObject
         {
             ["type"] = "object",
             ["properties"] = propertiesNode
         };
+        var toolAttribute = methodInfo.GetCustomAttribute<ToolAttribute>();
+        if (!string.IsNullOrEmpty(toolAttribute?.Description))
+        {
+            rootSchema["description"] = toolAttribute.Description;
+        }
 
         if (requiredNode.Count > 0)
         {
