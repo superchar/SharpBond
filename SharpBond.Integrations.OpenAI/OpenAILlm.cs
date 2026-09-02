@@ -3,9 +3,10 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
 using OpenAI.Chat;
-using SharpBond.Core.Abstractions;
 using SharpBond.Core.Helpers;
+using SharpBond.Core.Llm;
 using SharpBond.Core.Llm.Model;
+using SharpBond.Core.StateHandling;
 using SharpBond.Core.Tools;
 
 namespace SharpBond.Integrations.OpenAI;
@@ -15,15 +16,15 @@ public class OpenAILlm(string model, string apiKey, object[]? tools = null) : IL
     private readonly ChatClient _chatClient = new(model, apiKey);
     private readonly ConcurrentDictionary<string, (MethodInfo Method, object TargetObject)> _toolMethods = new();
 
-    public async Task<string> GenerateAsync(string prompt)
+    public async Task<string> GenerateAsync(string prompt, State? state = null)
     {
-        var result = await GenerateAsync([new UserMessage(prompt)]);
+        var result = await GenerateAsync([new UserMessage(prompt)], state);
         var assistantMessage = result.Last() as AssistantMessage;
 
         return assistantMessage?.Message ?? string.Empty;
     }
 
-    public async Task<List<LlmMessage>> GenerateAsync(List<LlmMessage> messages)
+    public async Task<List<LlmMessage>> GenerateAsync(List<LlmMessage> messages, State? state = null)
     {
         var completionsOptions = new ChatCompletionOptions();
         foreach (var tool in GetTools())
@@ -43,15 +44,15 @@ public class OpenAILlm(string model, string apiKey, object[]? tools = null) : IL
                 return messages;
             }
 
-            chatMessages = await ExecuteToolsAsync(chatMessages, result.Value.ToolCalls);
+            chatMessages = await ExecuteToolsAsync(chatMessages, result.Value.ToolCalls, state);
         }
     }
 
-    public IAsyncEnumerable<string> GenerateStreamingAsync(string prompt, CancellationToken cancellationToken)
-        => GenerateStreamingAsync([new UserMessage(prompt)], cancellationToken);
+    public IAsyncEnumerable<string> GenerateStreamingAsync(string prompt, CancellationToken cancellationToken, State? state = null)
+        => GenerateStreamingAsync([new UserMessage(prompt)], cancellationToken, state);
 
     public async IAsyncEnumerable<string> GenerateStreamingAsync(List<LlmMessage> messages,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, State? state = null)
     {
         var completionsOptions = new ChatCompletionOptions();
         foreach (var tool in GetTools())
@@ -117,7 +118,7 @@ public class OpenAILlm(string model, string apiKey, object[]? tools = null) : IL
                 yield break;
             }
 
-            chatMessages = await ExecuteToolsAsync(chatMessages, toolCalls);
+            chatMessages = await ExecuteToolsAsync(chatMessages, toolCalls, state);
         }
     }
 
@@ -141,7 +142,7 @@ public class OpenAILlm(string model, string apiKey, object[]? tools = null) : IL
             .ToList();
     
     private async Task<List<ChatMessage>> ExecuteToolsAsync(List<ChatMessage> messages,
-        IReadOnlyList<ChatToolCall> toolCalls)
+        IReadOnlyList<ChatToolCall> toolCalls, State state)
     {
         var toolTasks = new List<(Task<string> Task, ChatToolCall ToolCall)>();
         foreach (var toolCall in toolCalls)
@@ -153,7 +154,7 @@ public class OpenAILlm(string model, string apiKey, object[]? tools = null) : IL
 
             var parametersJson = JsonNode.Parse(toolCall.FunctionArguments)
                 .AsObject();
-            var toolTask = ToolExecutor.ExecuteToolAsync(toolMethod.Method, parametersJson, toolMethod.TargetObject);
+            var toolTask = ToolExecutor.ExecuteToolAsync(toolMethod.Method, parametersJson, toolMethod.TargetObject, state);
             toolTasks.Add((toolTask, toolCall));
         }
 

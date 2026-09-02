@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Schema;
+using SharpBond.Core.StateHandling;
 
 namespace SharpBond.Core.Tools;
 
@@ -38,6 +39,11 @@ public static class SchemaGenerator
 
         foreach (var parameter in methodInfo.GetParameters())
         {
+            if (parameter.ParameterType.IsAssignableFrom(typeof(State)))
+            {
+                continue;
+            }
+            
             var parameterSchemaNode =
                 JsonSerializerOptions.Default.GetJsonSchemaAsNode(parameter.ParameterType, ExporterOptions);
 

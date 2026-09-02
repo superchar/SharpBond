@@ -2,6 +2,7 @@
 using System.Threading.Channels;
 using SharpBond.Core.Abstractions;
 using SharpBond.Core.Helpers;
+using SharpBond.Core.Llm;
 using SharpBond.Core.StateHandling;
 
 namespace SharpBond.Core;
@@ -39,7 +40,6 @@ public abstract class Agent
         await foreach (var message in channel.Reader.ReadAllAsync())
         {
             var state = await _stateStorage.GetAsync<State>(sessionId);
-            StateHolder.State.Value = state;
             var (newState, messages) = await GetType().CallHandleMethodAsync(this, message, state);
             
             await _stateStorage.PutAsync(state.SessionId, newState);

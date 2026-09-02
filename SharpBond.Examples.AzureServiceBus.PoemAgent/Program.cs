@@ -1,5 +1,6 @@
 ﻿using SharpBond.Core;
 using SharpBond.Core.Abstractions;
+using SharpBond.Core.Llm;
 using SharpBond.Examples.AzureServiceBus.Types;
 using SharpBond.Integrations.AzureServiceBus;
 using SharpBond.Integrations.OpenAI;
