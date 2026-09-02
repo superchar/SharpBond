@@ -1,4 +1,6 @@
-﻿namespace SharpBond.Core;
+﻿using SharpBond.Core.StateHandling;
+
+namespace SharpBond.Core;
 
 public record Unit : State
 {

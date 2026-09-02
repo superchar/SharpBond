@@ -1,4 +1,6 @@
-﻿namespace SharpBond.Core.Abstractions;
+﻿using SharpBond.Core.StateHandling;
+
+namespace SharpBond.Core.Abstractions;
 
 public interface IMessageRuntime
 {

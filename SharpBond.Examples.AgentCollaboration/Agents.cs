@@ -1,5 +1,6 @@
 ﻿using SharpBond.Core;
 using SharpBond.Core.Abstractions;
+using SharpBond.Core.StateHandling;
 
 namespace SharpBond.Examples.AgentCollaboration;
 
