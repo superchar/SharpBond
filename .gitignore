@@ -20,3 +20,5 @@
 /SharpBond.Examples.AzureServiceBus.SummarizationAgent/bin
 /SharpBond.Examples.AzureServiceBus.SummarizationAgent/obj
 /SharpBond.Examples.AzureServiceBus.Types/obj
+/SharpBond.Examples.UserInput/obj
+/SharpBond.Examples.UserInput/bin
